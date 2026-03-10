@@ -3,6 +3,7 @@ const cors = require("cors");
 require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
+// To Fix DNS Issue
 const dns = require("dns");
 dns.setServers(["1.1.1.1", "8.8.8.8"]);
 
@@ -27,8 +28,17 @@ async function run() {
   try {
     const apartmentsCollection = client.db("roleNest").collection("apartments");
 
+    // Get all apartment data
     app.get("/apartments", async (req, res) => {
       const result = await apartmentsCollection.find().toArray();
+      res.send(result);
+    });
+
+    // Get one apartment data by id
+    app.get("/apartments/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await apartmentsCollection.findOne(query);
       res.send(result);
     });
 
