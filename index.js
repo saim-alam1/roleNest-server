@@ -27,6 +27,7 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     const apartmentsCollection = client.db("roleNest").collection("apartments");
+    const residentsCollection = client.db("roleNest").collection("residents");
 
     // Get all apartment data
     app.get("/apartments", async (req, res) => {
@@ -34,11 +35,23 @@ async function run() {
       res.send(result);
     });
 
-    // Get one apartment data by id
-    app.get("/apartments/:id", async (req, res) => {
-      const id = req.params.id;
-      const query = { _id: new ObjectId(id) };
-      const result = await apartmentsCollection.findOne(query);
+    // Posting User Agreements In User's Collection (Private)
+    app.post("/resident", async (req, res) => {
+      const userReq = req.body;
+
+      const alreadyExists = await residentsCollection.findOne({
+        userEmail: userReq.userEmail,
+      });
+
+      if (alreadyExists) {
+        return res.send({ message: "You're already in the queue" });
+      }
+
+      const result = await residentsCollection.insertOne({
+        ...userReq,
+        status: "pending",
+        requestedAt: new Date(),
+      });
       res.send(result);
     });
 
