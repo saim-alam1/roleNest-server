@@ -28,6 +28,7 @@ async function run() {
   try {
     const apartmentsCollection = client.db("roleNest").collection("apartments");
     const residentsCollection = client.db("roleNest").collection("residents");
+    const usersCollection = client.db("roleNest").collection("users");
 
     // Get all apartment data
     app.get("/apartments", async (req, res) => {
@@ -41,7 +42,7 @@ async function run() {
       res.send(result);
     });
 
-    // Posting User Agreements In User's Collection (Private)
+    // Posting User Agreements In Resident's Collection (VerifyJWT)
     app.post("/resident", async (req, res) => {
       const userReq = req.body;
 
@@ -57,6 +58,25 @@ async function run() {
         ...userReq,
         status: "pending",
         requestedAt: new Date(),
+      });
+      res.send(result);
+    });
+
+    // Posting User Info In User's Collection (VerifyJWT)
+    app.post("/users", async (req, res) => {
+      const userInfo = req.body;
+
+      const alreadyExists = await usersCollection.findOne({
+        userEmail: userInfo.userEmail,
+      });
+
+      if (alreadyExists) {
+        return res.send({ message: "You're already Registered" });
+      }
+      const result = await usersCollection.insertOne({
+        ...userInfo,
+        role: "user",
+        registeredAt: new Date(),
       });
       res.send(result);
     });
