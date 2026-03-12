@@ -31,7 +31,13 @@ async function run() {
 
     // Get all apartment data
     app.get("/apartments", async (req, res) => {
-      const result = await apartmentsCollection.find().toArray();
+      const page = parseInt(req.query.page) || 0;
+      const limit = parseInt(req.query.limit) || 6;
+      const result = await apartmentsCollection
+        .find()
+        .skip(page * limit)
+        .limit(limit)
+        .toArray();
       res.send(result);
     });
 
@@ -53,6 +59,12 @@ async function run() {
         requestedAt: new Date(),
       });
       res.send(result);
+    });
+
+    // Pagination of Apartments Data Cards
+    app.get("/apartment-count", async (req, res) => {
+      const count = await apartmentsCollection.estimatedDocumentCount();
+      res.send({ count });
     });
 
     // Send a ping to confirm a successful connection
