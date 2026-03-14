@@ -62,6 +62,13 @@ async function run() {
       res.send(result);
     });
 
+    // Loading User Role (VerifyJWT)
+    app.get("/user/:email/role", async (req, res) => {
+      const email = req.params.email;
+      const result = await usersCollection.findOne({ userEmail: email });
+      res.send(result?.role);
+    });
+
     // Posting User Info In User's Collection (VerifyJWT)
     app.post("/users", async (req, res) => {
       const userInfo = req.body;
