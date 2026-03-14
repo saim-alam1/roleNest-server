@@ -69,6 +69,12 @@ async function run() {
       res.send(result?.role);
     });
 
+    // Get All Agreement Requests (VerifyJWT, VerifyAdmin)
+    app.get("/agreement-requests", async (req, res) => {
+      const result = await residentsCollection.find().toArray();
+      res.send(result);
+    });
+
     // Posting User Info In User's Collection (VerifyJWT)
     app.post("/users", async (req, res) => {
       const userInfo = req.body;
