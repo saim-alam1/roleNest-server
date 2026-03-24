@@ -27,8 +27,11 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     const apartmentsCollection = client.db("roleNest").collection("apartments");
-    const residentsCollection = client.db("roleNest").collection("residents");
+    const applicationsCollection = client
+      .db("roleNest")
+      .collection("applications");
     const usersCollection = client.db("roleNest").collection("users");
+    const membersCollection = client.db("roleNest").collection("members");
 
     // Get all apartment data
     app.get("/apartments", async (req, res) => {
@@ -46,7 +49,7 @@ async function run() {
     app.post("/resident", async (req, res) => {
       const userReq = req.body;
 
-      const alreadyExists = await residentsCollection.findOne({
+      const alreadyExists = await applicationsCollection.findOne({
         userEmail: userReq.userEmail,
       });
 
@@ -54,7 +57,7 @@ async function run() {
         return res.send({ message: "You're already in the queue" });
       }
 
-      const result = await residentsCollection.insertOne({
+      const result = await applicationsCollection.insertOne({
         ...userReq,
         status: "pending",
         requestedAt: new Date(),
@@ -71,8 +74,32 @@ async function run() {
 
     // Get All Agreement Requests (VerifyJWT, VerifyAdmin)
     app.get("/agreement-requests", async (req, res) => {
-      const result = await residentsCollection.find().toArray();
+      const result = await applicationsCollection
+        .find({ status: "pending" })
+        .toArray();
       res.send(result);
+    });
+
+    // Accept Agreement By Email (VerifyJWT, VerifyAdmin)
+    app.patch("/accept-agreement/:email", async (req, res) => {
+      try {
+        const email = req.params.email;
+        const updateResidentStatus =
+          await applicationsCollection.findOneAndUpdate(
+            { userEmail: email },
+            { $set: { status: "checked" } },
+            { returnDocument: "after" },
+          );
+
+        const updateUsersRole = await usersCollection.findOneAndUpdate(
+          { userEmail: email },
+          { $set: { role: "member" } },
+          { returnDocument: "after" },
+        );
+        res.status(200).json({ message: "Agreement accepted successfully" });
+      } catch (error) {
+        res.status(500).json({ message: "Server error", error: error.message });
+      }
     });
 
     // Posting User Info In User's Collection (VerifyJWT)
