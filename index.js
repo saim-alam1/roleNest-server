@@ -102,6 +102,21 @@ async function run() {
       }
     });
 
+    // Reject Agreement By Email (VerifyJWT, VerifyAdmin)
+    app.patch("/reject-agreement/:email", async (req, res) => {
+      try {
+        const email = req.params.email;
+        await applicationsCollection.findOneAndUpdate(
+          { userEmail: email },
+          { $set: { status: "checked" } },
+          { returnDocument: "after" },
+        );
+        res.status(200).json({ message: "Agreement Rejected successfully" });
+      } catch (error) {
+        res.status(500).json({ message: "Server error", error: error.message });
+      }
+    });
+
     // Posting User Info In User's Collection (VerifyJWT)
     app.post("/users", async (req, res) => {
       const userInfo = req.body;
