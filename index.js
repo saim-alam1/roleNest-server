@@ -31,7 +31,7 @@ async function run() {
       .db("roleNest")
       .collection("applications");
     const usersCollection = client.db("roleNest").collection("users");
-    const membersCollection = client.db("roleNest").collection("members");
+    const couponsCollection = client.db("roleNest").collection("coupons");
 
     // Get all apartment data
     app.get("/apartments", async (req, res) => {
@@ -115,6 +115,20 @@ async function run() {
       } catch (error) {
         res.status(500).json({ message: "Server error", error: error.message });
       }
+    });
+
+    // Loading Coupons (VerifyJWT, VerifyAdmin)
+    app.get("/coupons", async (req, res) => {
+      const result = await couponsCollection.find().toArray();
+      res.send(result);
+    });
+
+    // Post Coupons In DB (VerifyJWT, VerifyAdmin)
+    app.post("/post-coupons", async (req, res) => {
+      const coupon = req.body;
+      coupon.discountPercentage = parseInt(coupon.discountPercentage, 10);
+      const result = await couponsCollection.insertOne(coupon);
+      res.status(200).json({ message: "Coupon Added Successfully" });
     });
 
     // Posting User Info In User's Collection (VerifyJWT)
