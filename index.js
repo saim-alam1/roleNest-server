@@ -32,6 +32,9 @@ async function run() {
       .collection("applications");
     const usersCollection = client.db("roleNest").collection("users");
     const couponsCollection = client.db("roleNest").collection("coupons");
+    const announcementsCollection = client
+      .db("roleNest")
+      .collection("announcement");
 
     // Get all apartment data
     app.get("/apartments", async (req, res) => {
@@ -121,6 +124,17 @@ async function run() {
     app.get("/coupons", async (req, res) => {
       const result = await couponsCollection.find().toArray();
       res.send(result);
+    });
+
+    // Posting Announcement (VerifyJWT, VerifyAdmin)
+    app.post("/make-announcement", async (req, res) => {
+      try {
+        const announcements = req.body;
+        const result = await announcementsCollection.insertOne(announcements);
+        res.status(200).json({ message: "Announcement received successfully" });
+      } catch (error) {
+        res.status(500).json({ error: error.message });
+      }
     });
 
     // Post Coupons In DB (VerifyJWT, VerifyAdmin)
