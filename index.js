@@ -151,6 +151,21 @@ async function run() {
       res.send(result);
     });
 
+    // Remove Member By Email (VerifyJWT, VerifyAdmin)
+    app.patch("/remove-member/:email", async (req, res) => {
+      const memberEmail = req.params.email;
+      try {
+        const result = await usersCollection.findOneAndUpdate(
+          { userEmail: memberEmail },
+          { $set: { role: "user" } },
+          { returnDocument: "after" },
+        );
+        res.status(200).json({ message: "Member Role Changed To User" });
+      } catch (error) {
+        res.status(500).json({ error: error.message });
+      }
+    });
+
     // Posting User Info In User's Collection (VerifyJWT)
     app.post("/users", async (req, res) => {
       const userInfo = req.body;
