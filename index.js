@@ -145,6 +145,12 @@ async function run() {
       res.status(200).json({ message: "Coupon Added Successfully" });
     });
 
+    // Loading Members Data (VerifyJWT, VerifyAdmin)
+    app.get("/manage-members", async (req, res) => {
+      const result = await usersCollection.find({ role: "member" }).toArray();
+      res.send(result);
+    });
+
     // Posting User Info In User's Collection (VerifyJWT)
     app.post("/users", async (req, res) => {
       const userInfo = req.body;
