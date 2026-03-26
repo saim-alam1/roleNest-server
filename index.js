@@ -166,6 +166,16 @@ async function run() {
       }
     });
 
+    // Load Announcements (VerifyJWT)
+    app.get("/announcements", async (req, res) => {
+      try {
+        const result = await announcementsCollection.find().toArray();
+        res.send(result);
+      } catch (error) {
+        res.status(500).json({ error: error.message });
+      }
+    });
+
     // Posting User Info In User's Collection (VerifyJWT)
     app.post("/users", async (req, res) => {
       const userInfo = req.body;
