@@ -83,6 +83,13 @@ async function run() {
       res.send(result);
     });
 
+    // Get All Agreement Requests (VerifyJWT)
+    app.get("/approved-agreement/:email", async (req, res) => {
+      const email = req.params.email;
+      const result = await applicationsCollection.findOne({ userEmail: email });
+      res.send(result);
+    });
+
     // Accept Agreement By Email (VerifyJWT, VerifyAdmin)
     app.patch("/accept-agreement/:email", async (req, res) => {
       try {
@@ -90,7 +97,7 @@ async function run() {
         const updateResidentStatus =
           await applicationsCollection.findOneAndUpdate(
             { userEmail: email },
-            { $set: { status: "checked" } },
+            { $set: { status: "checked", agreementAcceptedDate: new Date() } },
             { returnDocument: "after" },
           );
 
