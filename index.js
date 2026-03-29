@@ -127,6 +127,38 @@ async function run() {
       }
     });
 
+    // Post Payment Info (VerifyJWT)
+    app.patch("/payment-info/:email", async (req, res) => {
+      try {
+        const email = req.params.email;
+        const { month, couponCode, finalRent } = req.body;
+
+        const existingUser = await applicationsCollection.findOne({
+          userEmail: email,
+        });
+
+        if (existingUser?.month === month) {
+          return res.status(400).json({
+            message: "You already selected this month",
+          });
+        }
+
+        const result = await applicationsCollection.findOneAndUpdate(
+          { userEmail: email },
+          {
+            $set: {
+              month,
+              couponCode,
+              finalRent,
+            },
+          },
+          res.status(200).json({ message: "PaymentInfo saved successfully" }),
+        );
+      } catch (error) {
+        res.status(500).json({ message: "Server error", error: error.message });
+      }
+    });
+
     // Loading Coupons (VerifyJWT, VerifyAdmin)
     app.get("/coupons", async (req, res) => {
       const result = await couponsCollection.find().toArray();
