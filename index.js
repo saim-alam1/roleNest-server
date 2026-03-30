@@ -182,11 +182,19 @@ async function run() {
     app.patch("/payment-info/:email", async (req, res) => {
       try {
         const email = req.params.email;
-        const { couponCode, finalRent } = req.body;
+        const { couponCode, finalRent, transactionId } = req.body;
+
+        if (!finalRent || !transactionId) {
+          return res
+            .status(400)
+            .json({ message: "Missing required payment fields" });
+        }
 
         const result = await applicationsCollection.findOneAndUpdate(
           { userEmail: email },
-          { $set: { couponCode, finalRent } },
+          {
+            $set: { couponCode, finalRent, transactionId, paidAt: new Date() },
+          },
           { returnDocument: "after" },
         );
 
