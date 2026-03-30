@@ -155,6 +155,17 @@ async function run() {
       try {
         const paymentInfo = req.body;
 
+        const existingPayment = await paymentHistoryCollection.findOne({
+          userEmail: paymentInfo.userEmail,
+          month: paymentInfo.month,
+        });
+
+        if (existingPayment) {
+          return res.status(400).json({
+            message: `You have already paid for ${paymentInfo.month}`,
+          });
+        }
+
         const result = await paymentHistoryCollection.insertOne({
           ...paymentInfo,
           paymentStatus: "paid",
