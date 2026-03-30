@@ -150,7 +150,7 @@ async function run() {
       }
     });
 
-    // Payment History (VerifyJWT)
+    // Post Payment History (VerifyJWT)
     app.post("/payment-history", async (req, res) => {
       try {
         const paymentInfo = req.body;
@@ -170,6 +170,45 @@ async function run() {
           message: "Server error",
           error: error.message,
         });
+      }
+    });
+
+    // Loading Payment History
+    app.get("/my-payment-history/:email", async (req, res) => {
+      try {
+        const email = req.params.email;
+
+        const payments = await paymentHistoryCollection
+          .find({ userEmail: email })
+          .sort({ paidAt: -1 })
+          .toArray();
+
+        res.send(payments);
+      } catch (error) {
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Load Apartment Info (VerifyJWT)
+    app.get("/apartment-info/:email", async (req, res) => {
+      try {
+        const email = req.params.email;
+
+        const apartmentInfo = await applicationsCollection.findOne(
+          { userEmail: email },
+          {
+            projection: {
+              floorNo: 1,
+              blockName: 1,
+              apartmentNo: 1,
+              _id: 0,
+            },
+          },
+        );
+
+        res.send(apartmentInfo);
+      } catch (error) {
+        res.status(500).json({ error: error.message });
       }
     });
 
