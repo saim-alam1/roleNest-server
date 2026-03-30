@@ -3,6 +3,8 @@ const cors = require("cors");
 require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
+const stripe = require("stripe")(process.env.PAYMENT_GATEWAY_KEY);
+
 // To Fix DNS Issue
 const dns = require("dns");
 dns.setServers(["1.1.1.1", "8.8.8.8"]);
@@ -127,11 +129,11 @@ async function run() {
       }
     });
 
-    // Post Payment Info (VerifyJWT)
-    app.patch("/payment-info/:email", async (req, res) => {
+    // Post Payment Month (VerifyJWT)
+    app.patch("/payment-month/:email", async (req, res) => {
       try {
         const email = req.params.email;
-        const { month, couponCode, finalRent } = req.body;
+        const { month } = req.body;
 
         const existingUser = await applicationsCollection.findOne({
           userEmail: email,
@@ -143,17 +145,54 @@ async function run() {
           });
         }
 
+        // Update the month
         const result = await applicationsCollection.findOneAndUpdate(
           { userEmail: email },
-          {
-            $set: {
-              month,
-              couponCode,
-              finalRent,
-            },
-          },
-          res.status(200).json({ message: "PaymentInfo saved successfully" }),
+          { $set: { month } },
+          { returnDocument: "after" },
         );
+
+        res
+          .status(200)
+          .json({ message: "Payment month saved successfully", result });
+      } catch (error) {
+        res.status(500).json({ message: "Server error", error: error.message });
+      }
+    });
+
+    // Create a payment intent
+    app.post("/create-payment-intent", async (req, res) => {
+      const amountInPoisha = req.body.amountInPoisha;
+      try {
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: amountInPoisha, // Amount in poisha
+          currency: "bdt",
+          payment_method_types: ["card"],
+        });
+
+        res.json({
+          clientSecret: paymentIntent.client_secret,
+        });
+      } catch (error) {
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Post Payment Info (VerifyJWT)
+    app.patch("/payment-info/:email", async (req, res) => {
+      try {
+        const email = req.params.email;
+        const { couponCode, finalRent } = req.body;
+
+        const result = await applicationsCollection.findOneAndUpdate(
+          { userEmail: email },
+          { $set: { couponCode, finalRent } },
+          { returnDocument: "after" },
+        );
+
+        res
+          .status(200)
+          .json({ message: "Payment info saved successfully", result });
       } catch (error) {
         res.status(500).json({ message: "Server error", error: error.message });
       }
