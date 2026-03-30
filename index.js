@@ -37,6 +37,9 @@ async function run() {
     const announcementsCollection = client
       .db("roleNest")
       .collection("announcement");
+    const paymentHistoryCollection = client
+      .db("roleNest")
+      .collection("paymentHistory");
 
     // Get all apartment data
     app.get("/apartments", async (req, res) => {
@@ -129,37 +132,6 @@ async function run() {
       }
     });
 
-    // Post Payment Month (VerifyJWT)
-    app.patch("/payment-month/:email", async (req, res) => {
-      try {
-        const email = req.params.email;
-        const { month } = req.body;
-
-        const existingUser = await applicationsCollection.findOne({
-          userEmail: email,
-        });
-
-        if (existingUser?.month === month) {
-          return res.status(400).json({
-            message: "You already selected this month",
-          });
-        }
-
-        // Update the month
-        const result = await applicationsCollection.findOneAndUpdate(
-          { userEmail: email },
-          { $set: { month } },
-          { returnDocument: "after" },
-        );
-
-        res
-          .status(200)
-          .json({ message: "Payment month saved successfully", result });
-      } catch (error) {
-        res.status(500).json({ message: "Server error", error: error.message });
-      }
-    });
-
     // Create a payment intent
     app.post("/create-payment-intent", async (req, res) => {
       const amountInPoisha = req.body.amountInPoisha;
@@ -178,31 +150,26 @@ async function run() {
       }
     });
 
-    // Post Payment Info (VerifyJWT)
-    app.patch("/payment-info/:email", async (req, res) => {
+    // Payment History (VerifyJWT)
+    app.post("/payment-history", async (req, res) => {
       try {
-        const email = req.params.email;
-        const { couponCode, finalRent, transactionId } = req.body;
+        const paymentInfo = req.body;
 
-        if (!finalRent || !transactionId) {
-          return res
-            .status(400)
-            .json({ message: "Missing required payment fields" });
-        }
+        const result = await paymentHistoryCollection.insertOne({
+          ...paymentInfo,
+          paymentStatus: "paid",
+          paidAt: new Date(),
+        });
 
-        const result = await applicationsCollection.findOneAndUpdate(
-          { userEmail: email },
-          {
-            $set: { couponCode, finalRent, transactionId, paidAt: new Date() },
-          },
-          { returnDocument: "after" },
-        );
-
-        res
-          .status(200)
-          .json({ message: "Payment info saved successfully", result });
+        res.status(200).json({
+          message: "Payment saved successfully",
+          result,
+        });
       } catch (error) {
-        res.status(500).json({ message: "Server error", error: error.message });
+        res.status(500).json({
+          message: "Server error",
+          error: error.message,
+        });
       }
     });
 
