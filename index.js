@@ -304,6 +304,88 @@ async function run() {
       res.send({ count });
     });
 
+    // Admin Stats (VerifyJWT, VerifyAdmin)
+    app.get("/admin-profile-stats/:email", async (req, res) => {
+      try {
+        const email = req.params.email;
+
+        const requester = await usersCollection.findOne({
+          userEmail: email,
+        });
+
+        if (!requester || requester.role !== "admin") {
+          return res.status(403).send({
+            message: "Forbidden access",
+          });
+        }
+
+        const totalRoomsData = await apartmentsCollection
+          .aggregate([
+            {
+              $count: "totalRooms",
+            },
+          ])
+          .toArray();
+
+        const unavailableRoomsData = await applicationsCollection
+          .aggregate([
+            {
+              $match: { status: "checked" },
+            },
+            {
+              $count: "unavailableRooms",
+            },
+          ])
+          .toArray();
+
+        const totalUsersData = await usersCollection
+          .aggregate([
+            {
+              $count: "totalUsers",
+            },
+          ])
+          .toArray();
+
+        const totalMembersData = await usersCollection
+          .aggregate([
+            {
+              $match: { role: "member" },
+            },
+            {
+              $count: "totalMembers",
+            },
+          ])
+          .toArray();
+
+        const totalRooms = totalRoomsData[0]?.totalRooms || 0;
+        const unavailableRooms = unavailableRoomsData[0]?.unavailableRooms || 0;
+        const totalUsers = totalUsersData[0]?.totalUsers || 0;
+        const totalMembers = totalMembersData[0]?.totalMembers || 0;
+
+        const availableRooms = totalRooms - unavailableRooms;
+
+        const availablePercentage =
+          totalRooms > 0 ? ((availableRooms / totalRooms) * 100).toFixed(2) : 0;
+
+        const unavailablePercentage =
+          totalRooms > 0
+            ? ((unavailableRooms / totalRooms) * 100).toFixed(2)
+            : 0;
+
+        res.send({
+          totalRooms,
+          availablePercentage,
+          unavailablePercentage,
+          totalUsers,
+          totalMembers,
+        });
+      } catch (error) {
+        res.status(500).send({
+          error: error.message,
+        });
+      }
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
