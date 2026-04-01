@@ -148,7 +148,7 @@ async function run() {
     });
 
     // Get All Agreement Requests (VerifyJWT, VerifyAdmin)
-    app.get("/agreement-requests", async (req, res) => {
+    app.get("/agreement-requests", verifyJWT, verifyAdmin, async (req, res) => {
       const result = await applicationsCollection
         .find({ status: "pending" })
         .toArray();
@@ -325,7 +325,7 @@ async function run() {
     });
 
     // Posting Announcement (VerifyJWT, VerifyAdmin)
-    app.post("/make-announcement", async (req, res) => {
+    app.post("/make-announcement", verifyJWT, verifyAdmin, async (req, res) => {
       try {
         const announcements = req.body;
         const result = await announcementsCollection.insertOne(announcements);
