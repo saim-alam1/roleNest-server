@@ -319,7 +319,7 @@ async function run() {
     );
 
     // Loading Coupons (VerifyJWT, VerifyAdmin)
-    app.get("/coupons", async (req, res) => {
+    app.get("/coupons", verifyJWT, verifyAdmin, async (req, res) => {
       const result = await couponsCollection.find().toArray();
       res.send(result);
     });
