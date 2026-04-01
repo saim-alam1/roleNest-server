@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const admin = require("firebase-admin");
 
 const stripe = require("stripe")(process.env.PAYMENT_GATEWAY_KEY);
 
@@ -26,6 +27,12 @@ const client = new MongoClient(uri, {
   },
 });
 
+const serviceAccount = require("./firebase-admin-service-key.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
+
 async function run() {
   try {
     const apartmentsCollection = client.db("roleNest").collection("apartments");
@@ -40,6 +47,66 @@ async function run() {
     const paymentHistoryCollection = client
       .db("roleNest")
       .collection("paymentHistory");
+
+    // Custom Middlewares
+
+    // Verify Firebase Access Token
+    const verifyJWT = async (req, res, next) => {
+      const authHeader = req.headers?.authorization;
+
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).send({ message: "Unauthorized Access" });
+      }
+
+      const token = authHeader.split(" ")[1];
+
+      if (!token) {
+        return res.status(401).send({ message: "Unauthorized Access" });
+      }
+
+      // Verifying The Token
+      try {
+        const decoded = await admin.auth().verifyIdToken(token);
+        req.decoded = decoded;
+        next();
+      } catch (error) {
+        return res.status(403).send({ message: "Forbidden Access" });
+      }
+    };
+
+    // Verify Role Admin
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.decoded.email;
+
+      const user = await usersCollection.findOne({
+        userEmail: email,
+      });
+
+      if (!user || user.role !== "admin") {
+        return res.status(403).send({
+          message: "Forbidden Access",
+        });
+      }
+
+      next();
+    };
+
+    // Verify Role Member
+    const verifyMember = async (req, res, next) => {
+      const email = req.decoded.email;
+
+      const user = await usersCollection.findOne({
+        userEmail: email,
+      });
+
+      if (!user || user.role !== "member") {
+        return res.status(403).send({
+          message: "Forbidden Access",
+        });
+      }
+
+      next();
+    };
 
     // Get all apartment data
     app.get("/apartments", async (req, res) => {
@@ -89,11 +156,29 @@ async function run() {
     });
 
     // Get All Agreement Requests (VerifyJWT)
-    app.get("/approved-agreement/:email", async (req, res) => {
-      const email = req.params.email;
-      const result = await applicationsCollection.findOne({ userEmail: email });
-      res.send(result);
-    });
+    app.get(
+      "/approved-agreement/:email",
+      verifyJWT,
+      verifyMember,
+      async (req, res) => {
+        try {
+          const email = req.params.email;
+
+          if (req.decoded.email !== email) {
+            return res.status(403).send({ message: "Forbidden Access" });
+          }
+
+          const result = await applicationsCollection.findOne({
+            userEmail: email,
+          });
+          res.send(result);
+        } catch (error) {
+          res
+            .status(500)
+            .json({ message: "Server error", error: error.message });
+        }
+      },
+    );
 
     // Accept Agreement By Email (VerifyJWT, VerifyAdmin)
     app.patch("/accept-agreement/:email", async (req, res) => {
@@ -151,7 +236,7 @@ async function run() {
     });
 
     // Post Payment History (VerifyJWT)
-    app.post("/payment-history", async (req, res) => {
+    app.post("/payment-history", verifyJWT, verifyMember, async (req, res) => {
       try {
         const paymentInfo = req.body;
 
@@ -185,43 +270,53 @@ async function run() {
     });
 
     // Loading Payment History
-    app.get("/my-payment-history/:email", async (req, res) => {
-      try {
-        const email = req.params.email;
+    app.get(
+      "/my-payment-history/:email",
+      verifyJWT,
+      verifyMember,
+      async (req, res) => {
+        try {
+          const email = req.params.email;
 
-        const payments = await paymentHistoryCollection
-          .find({ userEmail: email })
-          .sort({ paidAt: -1 })
-          .toArray();
+          const payments = await paymentHistoryCollection
+            .find({ userEmail: email })
+            .sort({ paidAt: -1 })
+            .toArray();
 
-        res.send(payments);
-      } catch (error) {
-        res.status(500).json({ error: error.message });
-      }
-    });
+          res.send(payments);
+        } catch (error) {
+          res.status(500).json({ error: error.message });
+        }
+      },
+    );
 
     // Load Apartment Info (VerifyJWT)
-    app.get("/apartment-info/:email", async (req, res) => {
-      try {
-        const email = req.params.email;
+    app.get(
+      "/apartment-info/:email",
+      verifyJWT,
+      verifyMember,
+      async (req, res) => {
+        try {
+          const email = req.params.email;
 
-        const apartmentInfo = await applicationsCollection.findOne(
-          { userEmail: email },
-          {
-            projection: {
-              floorNo: 1,
-              blockName: 1,
-              apartmentNo: 1,
-              _id: 0,
+          const apartmentInfo = await applicationsCollection.findOne(
+            { userEmail: email },
+            {
+              projection: {
+                floorNo: 1,
+                blockName: 1,
+                apartmentNo: 1,
+                _id: 0,
+              },
             },
-          },
-        );
+          );
 
-        res.send(apartmentInfo);
-      } catch (error) {
-        res.status(500).json({ error: error.message });
-      }
-    });
+          res.send(apartmentInfo);
+        } catch (error) {
+          res.status(500).json({ error: error.message });
+        }
+      },
+    );
 
     // Loading Coupons (VerifyJWT, VerifyAdmin)
     app.get("/coupons", async (req, res) => {
@@ -270,7 +365,7 @@ async function run() {
     });
 
     // Load Announcements (VerifyJWT)
-    app.get("/announcements", async (req, res) => {
+    app.get("/announcements", verifyJWT, async (req, res) => {
       try {
         const result = await announcementsCollection.find().toArray();
         res.send(result);
