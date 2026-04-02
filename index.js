@@ -27,7 +27,12 @@ const client = new MongoClient(uri, {
   },
 });
 
-const serviceAccount = require("./firebase-admin-service-key.json");
+const decodedKey = Buffer.from(
+  process.env.FIREBASE_SERVICE_KEY,
+  "base64",
+).toString("utf8");
+
+const serviceAccount = JSON.parse(decodedKey);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -35,6 +40,7 @@ admin.initializeApp({
 
 async function run() {
   try {
+    // await client.connect();
     const apartmentsCollection = client.db("roleNest").collection("apartments");
     const applicationsCollection = client
       .db("roleNest")
@@ -121,8 +127,12 @@ async function run() {
     });
 
     // Posting User Agreements In Resident's Collection (VerifyJWT)
-    app.post("/resident", async (req, res) => {
+    app.post("/resident", verifyJWT, async (req, res) => {
       const userReq = req.body;
+
+      if (req.decoded.email !== userReq.userEmail) {
+        return res.status(403).send({ message: "Forbidden Access" });
+      }
 
       const alreadyExists = await applicationsCollection.findOne({
         userEmail: userReq.userEmail,
@@ -141,8 +151,11 @@ async function run() {
     });
 
     // Loading User Role (VerifyJWT)
-    app.get("/user/:email/role", async (req, res) => {
+    app.get("/user/:email/role", verifyJWT, async (req, res) => {
       const email = req.params.email;
+      if (req.decoded.email !== email) {
+        return res.status(403).send({ message: "Forbidden Access" });
+      }
       const result = await usersCollection.findOne({ userEmail: email });
       res.send(result?.role);
     });
@@ -156,22 +169,46 @@ async function run() {
     });
 
     // Get All Agreement Requests (VerifyJWT)
-    app.get(
-      "/approved-agreement/:email",
+    app.get("/approved-agreement/:email", verifyJWT, async (req, res) => {
+      try {
+        const email = req.params.email;
+
+        if (req.decoded.email !== email) {
+          return res.status(403).send({ message: "Forbidden Access" });
+        }
+
+        const result = await applicationsCollection.findOne({
+          userEmail: email,
+        });
+        res.send(result);
+      } catch (error) {
+        res.status(500).json({ message: "Server error", error: error.message });
+      }
+    });
+
+    // Accept Agreement By Email (VerifyJWT, VerifyAdmin)
+    app.patch(
+      "/accept-agreement/:email",
       verifyJWT,
-      verifyMember,
+      verifyAdmin,
       async (req, res) => {
         try {
           const email = req.params.email;
+          const updateResidentStatus =
+            await applicationsCollection.findOneAndUpdate(
+              { userEmail: email },
+              {
+                $set: { status: "checked", agreementAcceptedDate: new Date() },
+              },
+              { returnDocument: "after" },
+            );
 
-          if (req.decoded.email !== email) {
-            return res.status(403).send({ message: "Forbidden Access" });
-          }
-
-          const result = await applicationsCollection.findOne({
-            userEmail: email,
-          });
-          res.send(result);
+          const updateUsersRole = await usersCollection.findOneAndUpdate(
+            { userEmail: email },
+            { $set: { role: "member" } },
+            { returnDocument: "after" },
+          );
+          res.status(200).json({ message: "Agreement accepted successfully" });
         } catch (error) {
           res
             .status(500)
@@ -180,65 +217,59 @@ async function run() {
       },
     );
 
-    // Accept Agreement By Email (VerifyJWT, VerifyAdmin)
-    app.patch("/accept-agreement/:email", async (req, res) => {
-      try {
-        const email = req.params.email;
-        const updateResidentStatus =
+    // Reject Agreement By Email (VerifyJWT, VerifyAdmin)
+    app.patch(
+      "/reject-agreement/:email",
+      verifyJWT,
+      verifyAdmin,
+      async (req, res) => {
+        try {
+          const email = req.params.email;
           await applicationsCollection.findOneAndUpdate(
             { userEmail: email },
-            { $set: { status: "checked", agreementAcceptedDate: new Date() } },
+            { $set: { status: "checked" } },
             { returnDocument: "after" },
           );
-
-        const updateUsersRole = await usersCollection.findOneAndUpdate(
-          { userEmail: email },
-          { $set: { role: "member" } },
-          { returnDocument: "after" },
-        );
-        res.status(200).json({ message: "Agreement accepted successfully" });
-      } catch (error) {
-        res.status(500).json({ message: "Server error", error: error.message });
-      }
-    });
-
-    // Reject Agreement By Email (VerifyJWT, VerifyAdmin)
-    app.patch("/reject-agreement/:email", async (req, res) => {
-      try {
-        const email = req.params.email;
-        await applicationsCollection.findOneAndUpdate(
-          { userEmail: email },
-          { $set: { status: "checked" } },
-          { returnDocument: "after" },
-        );
-        res.status(200).json({ message: "Agreement Rejected successfully" });
-      } catch (error) {
-        res.status(500).json({ message: "Server error", error: error.message });
-      }
-    });
+          res.status(200).json({ message: "Agreement Rejected successfully" });
+        } catch (error) {
+          res
+            .status(500)
+            .json({ message: "Server error", error: error.message });
+        }
+      },
+    );
 
     // Create a payment intent
-    app.post("/create-payment-intent", async (req, res) => {
-      const amountInPoisha = req.body.amountInPoisha;
-      try {
-        const paymentIntent = await stripe.paymentIntents.create({
-          amount: amountInPoisha, // Amount in poisha
-          currency: "bdt",
-          payment_method_types: ["card"],
-        });
+    app.post(
+      "/create-payment-intent",
+      verifyJWT,
+      verifyMember,
+      async (req, res) => {
+        const amountInPoisha = req.body.amountInPoisha;
+        try {
+          const paymentIntent = await stripe.paymentIntents.create({
+            amount: amountInPoisha, // Amount in poisha
+            currency: "bdt",
+            payment_method_types: ["card"],
+          });
 
-        res.json({
-          clientSecret: paymentIntent.client_secret,
-        });
-      } catch (error) {
-        res.status(500).json({ error: error.message });
-      }
-    });
+          res.json({
+            clientSecret: paymentIntent.client_secret,
+          });
+        } catch (error) {
+          res.status(500).json({ error: error.message });
+        }
+      },
+    );
 
     // Post Payment History (VerifyJWT)
     app.post("/payment-history", verifyJWT, verifyMember, async (req, res) => {
       try {
         const paymentInfo = req.body;
+
+        if (req.decoded.email !== paymentInfo.userEmail) {
+          return res.status(403).send({ message: "Forbidden Access" });
+        }
 
         const existingPayment = await paymentHistoryCollection.findOne({
           userEmail: paymentInfo.userEmail,
@@ -278,6 +309,10 @@ async function run() {
         try {
           const email = req.params.email;
 
+          if (req.decoded.email !== email) {
+            return res.status(403).send({ message: "Forbidden Access" });
+          }
+
           const payments = await paymentHistoryCollection
             .find({ userEmail: email })
             .sort({ paidAt: -1 })
@@ -299,6 +334,10 @@ async function run() {
         try {
           const email = req.params.email;
 
+          if (req.decoded.email !== email) {
+            return res.status(403).send({ message: "Forbidden Access" });
+          }
+
           const apartmentInfo = await applicationsCollection.findOne(
             { userEmail: email },
             {
@@ -319,7 +358,7 @@ async function run() {
     );
 
     // Loading Coupons (VerifyJWT, VerifyAdmin)
-    app.get("/coupons", verifyJWT, async (req, res) => {
+    app.get("/coupons", async (req, res) => {
       const result = await couponsCollection.find().toArray();
       res.send(result);
     });
@@ -336,7 +375,7 @@ async function run() {
     });
 
     // Post Coupons In DB (VerifyJWT, VerifyAdmin)
-    app.post("/post-coupons", async (req, res) => {
+    app.post("/post-coupons", verifyJWT, verifyAdmin, async (req, res) => {
       const coupon = req.body;
       coupon.discountPercentage = parseInt(coupon.discountPercentage, 10);
       const result = await couponsCollection.insertOne(coupon);
@@ -411,18 +450,6 @@ async function run() {
       verifyAdmin,
       async (req, res) => {
         try {
-          const email = req.params.email;
-
-          const requester = await usersCollection.findOne({
-            userEmail: email,
-          });
-
-          if (!requester || requester.role !== "admin") {
-            return res.status(403).send({
-              message: "Forbidden access",
-            });
-          }
-
           const totalRoomsData = await apartmentsCollection
             .aggregate([
               {
