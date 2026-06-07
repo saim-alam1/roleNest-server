@@ -40,7 +40,7 @@ admin.initializeApp({
 
 async function run() {
   try {
-    // await client.connect();
+    await client.connect();
     const apartmentsCollection = client.db("roleNest").collection("apartments");
     const applicationsCollection = client
       .db("roleNest")
