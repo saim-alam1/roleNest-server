@@ -50,7 +50,7 @@ admin.initializeApp({
 
 async function run() {
   try {
-    await client.connect();
+    // await client.connect();
     const apartmentsCollection = client.db("roleNest").collection("apartments");
     const applicationsCollection = client
       .db("roleNest")
@@ -547,7 +547,7 @@ app.get("/", (req, res) => {
   res.send(`roleNest is running`);
 });
 
-module.exports = app;
+// module.exports = app;
 
 app.listen(port, () => {
   console.log(`roleNest server is running in port: ${port}`);
